@@ -1,15 +1,15 @@
 # 睿抗天气图像四分类方案
 
-本仓库整理了睿抗天气图像分类比赛中最终保留的两套方案：线上最强的 EfficientNet-B1 单模，以及比赛末期使用的双 B1 logits ensemble。任务包含 `cloudy`、`rainy`、`snowy`、`sunny` 四类，评价指标为 macro F1。
+本仓库整理了睿抗天气图像分类比赛中最终保留的两套方案：长期最强的 EfficientNet-B1 单模，以及比赛最终提交的双 B1 logits ensemble。任务包含 `cloudy`、`rainy`、`snowy`、`sunny` 四类，评价指标为 macro F1。
 
 ## 成绩
 
 | 方案 | 线上 macro F1 | 固定本地测试集 macro F1 | 说明 |
 |---|---:|---:|---|
-| **B1 ExtPre16 + EMA 单模** | **0.9620** | 0.976991 | 线上最优，推荐默认使用 |
-| 0.85 ExtPre16 + 0.15 FT-SAM ensemble | 0.9605 | **0.978203** | 最终保留的 ensemble，线上未超过单模 |
+| B1 ExtPre16 + EMA 单模 | 0.9620 | 0.976991 | 长期最强单模 |
+| **0.85 ExtPre16 + 0.15 FT-SAM ensemble** | **> 0.9620** | **0.978203** | 最终提交，线上最高 |
 
-线上分数来自比赛平台；固定本地测试集为从 4,999 张训练图像中预留的 10%，只用于最终比较。两种分数不能直接横向等同。
+最终 ensemble 的精确线上分数未保存在本地记录中，但比赛结果确认高于单模的 `0.9620`。此前记录的 `0.9605` 属于更早的 `0.70 ExtPre16 + 0.30 FT-SAM` 中间实验，不是最终提交。固定本地测试集为从 4,999 张训练图像中预留的 10%，只用于最终比较；线上与本地分数不能直接横向等同。
 
 ## 核心方法
 
@@ -20,7 +20,7 @@
 5. 使用逆频率类别权重、CrossEntropy、`label_smoothing=0.05`、AdamW、CosineAnnealingLR 和 `EMA decay=0.995`。
 6. 第二个 ensemble 成员仅在比赛数据微调阶段改用 SAM，`rho=0.05`；最终对两个模型的 logits 按 0.85 / 0.15 加权。
 
-实践中，外部四分类预训练带来的提升最稳定。更大的 backbone、更强数据增强、TTA、额外外部数据、SelfKD 和复杂 stacking 均未在线上超过该 B1 单模。
+实践中，外部四分类预训练带来的提升最稳定。更大的 backbone、更强数据增强、TTA、额外外部数据、SelfKD 和复杂 stacking 均未形成更可靠的单模型；最终仅用小权重 FT-SAM 分支与主模型做保守集成。
 
 ## 仓库结构
 
@@ -146,7 +146,7 @@ image = cv2.imread("example.jpg")
 print(main.predict(image))
 ```
 
-`main.py` 默认加载两份权重并执行 0.85 / 0.15 logits ensemble；`main_single.py` 只加载线上最强单模。两者都接收 OpenCV BGR 格式的 `numpy.ndarray`，返回四个英文类别名之一。
+`main.py` 默认加载两份权重并执行 0.85 / 0.15 logits ensemble；`main_single.py` 只加载长期最强单模。两者都接收 OpenCV BGR 格式的 `numpy.ndarray`，返回四个英文类别名之一。
 
 若平台要求入口文件名必须为 `main.py`：
 
