@@ -1,0 +1,7 @@
+torch>=2.0
+torchvision>=0.15
+numpy>=1.23
+Pillow>=9.0
+scikit-learn>=1.2
+opencv-python-headless>=4.7
+tqdm>=4.64
