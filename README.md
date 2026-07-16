@@ -144,6 +144,56 @@ print(main.predict(image))
 
 `main.py` 默认加载两份权重并执行 0.85 / 0.15 logits ensemble；`main_single.py` 只加载长期最强单模。两者都接收 OpenCV BGR 格式的 `numpy.ndarray`，返回四个英文类别名之一。
 
+## 失败尝试与复盘
+
+- **更大或更新的 Backbone**
+
+  尝试内容：测试了 EfficientNet-B2/B3/B7、ResNet50、ConvNeXt/ConvNeXtV2、Swin-T、DeiT-S 和 DINOv3 等架构，均未稳定超过 EfficientNet-B1。
+
+  可能原因：比赛训练集只有 4,999 张图像，更大的模型方差更高、也更容易过拟合；当前外部数据规模和训练超参数与 B1 的容量更匹配，预训练模型更大并不等于目标域效果更好。
+
+- **更强的数据增强**
+
+  尝试内容：将 `RandomResizedCrop` 扩大到 `(0.75, 1.0)`，增强 ColorJitter，并加入 RandomGrayscale 和 RandomErasing，5-Fold 分数由原版约 0.9335 降至约 0.9316。
+
+  可能原因：天气分类依赖整幅图像的色彩、亮度和云层纹理，过强裁剪与颜色扰动会破坏这些类别线索；增强强度应贴近真实拍摄变化，而不是越强越好。
+
+- **激进的类别平衡策略**
+
+  尝试内容：使用 `WeightedRandomSampler` 并移除 loss class weight，三次结果约为 0.9454、0.9345、0.9377；Balanced Softmax 也出现少数类 recall 上升、precision 下降的现象。
+
+  可能原因：类别不平衡并未严重到需要重采样，重复少数类样本容易同时放大噪声并改变真实类别先验。最终采用普通 shuffle 配合逆频率加权 CE 更稳定。
+
+- **TTA 推理增强**
+
+  尝试内容：测试了水平翻转、几何裁剪，以及亮度抖动、高斯噪声和条纹干扰等多视图 TTA，大部分设置使验证或线上分数下降，同时成倍增加 CPU 推理开销。
+
+  可能原因：部分变换并非严格保持天气语义，平均 logits 会把有偏预测一起混入；同一模型不同视图的错误相关性也很高，无法保证通过平均获得有效互补。
+
+- **Self-Distillation 与 PatchSwap**
+
+  尝试内容：测试了 SelfKD、ensemble teacher 蒸馏和同类别 PatchSwap。部分方案本地达到 0.977 至 0.979，但 SelfKD、EnsembleKD 和 PatchSwap 的线上分数分别仅为 0.9507、0.9519 和 0.9450。
+
+  可能原因：教师和学生均为同结构 B1，错误高度相关；小规模固定划分容易高估蒸馏收益。PatchSwap 还可能破坏天气场景所需的全局空间与纹理一致性。
+
+- **扩展外部数据与域适配**
+
+  尝试内容：增加更多外部天气数据后，本地单次最高达到 0.981818，但线上反而下降；数据过滤、AdaBN 和 source data soft weighting 也没有稳定提升。
+
+  可能原因：新增数据与线上目标域在场景、类别定义和图像质量上存在偏移，更多数据可能引入额外噪声。依据当前模型过滤源数据还会强化模型已有偏差，造成对本地划分的虚假提升。
+
+- **复杂 Ensemble 与 Stacking**
+
+  尝试内容：搜索模型权重、temperature 和 class bias 后，validation macro F1 可达 0.978888，但 local test 仅为 0.977014；GBDT stacking 更出现 validation 1.0、local test 0.954758 的严重过拟合。FT-SAM 单模线上为 0.9577，也低于主模型的 0.9620。
+
+  可能原因：仅用 500 张 validation 图像学习融合参数，自由度远高于有效样本量；多个 B1 分支的错误又高度相关。最终固定使用 `0.85 ExtPre16 + 0.15 FT-SAM`，让较弱分支只提供少量互补信息，线上提升至 0.9641。
+
+- **同架构 5-Fold 推理集成**
+
+  尝试内容：在固定 local test 之外训练 5 个早期 B1 fold 模型并平均 logits，local test macro F1 为 0.946245，低于同阶段单模的 0.953633。
+
+  可能原因：每个 fold 只能使用部分开发数据，且相同架构、初始化与训练策略产生的错误高度相关。5-Fold 更适合评估方案的稳定性，并不保证将 5 个模型用于推理就一定提分。
+
 ## 5-Fold CV
 
 比赛结束后，在全部 4,999 张训练图像上补做 Stratified 5-Fold CV。最强方案 `ExtPre16 + EMA` 的 OOF macro F1 为 **0.971914**，Fold 均值为 **0.971935 ± 0.005706**，同样优于 SelfKD、FT-SAM 和额外外部数据方案。完整结果见 [docs/cv5_results.md](docs/cv5_results.md)。
