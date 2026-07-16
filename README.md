@@ -148,11 +148,4 @@ print(main.predict(image))
 
 比赛结束后，在全部 4,999 张训练图像上补做 Stratified 5-Fold CV。最强方案 `ExtPre16 + EMA` 的 OOF macro F1 为 **0.971914**，Fold 均值为 **0.971935 ± 0.005706**，同样优于 SelfKD、FT-SAM 和额外外部数据方案。完整结果见 [docs/cv5_results.md](docs/cv5_results.md)。
 
-## 权重校验
-
-```text
-19864fb0569706a979eb574580b0b9e430b674caac0eb6838569f592b486b183  B1_ExtPre16_EMA_repeat3_testf1_0.976991.pth
-7fe4415b0a9bb9bee7aad6beb55666f84ca2fc258828a91e8bd327f6f33d043e  B1_ExtPre16EMA_FTSAM_repeat1_testf1_0.978412.pth
-```
-
 代码采用 MIT License。数据集版权与许可归各自原作者和比赛平台所有。
