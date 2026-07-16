@@ -1,4 +1,4 @@
-# 睿抗天气图像四分类方案
+# 2026睿抗智海-天气分类
 
 本仓库整理了睿抗天气图像分类比赛中最终保留的两套方案：长期最强的 EfficientNet-B1 单模，以及比赛最终提交的双 B1 logits ensemble。任务包含 `cloudy`、`rainy`、`snowy`、`sunny` 四类，评价指标为 macro F1。
 
@@ -7,13 +7,13 @@
 | 方案 | 线上 macro F1 | 固定本地测试集 macro F1 | 说明 |
 |---|---:|---:|---|
 | B1 ExtPre16 + EMA 单模 | 0.9620 | 0.976991 | 长期最强单模 |
-| **0.85 ExtPre16 + 0.15 FT-SAM ensemble** | **> 0.9620** | **0.978203** | 最终提交，线上最高 |
+| **0.85 ExtPre16 + 0.15 FT-SAM ensemble** | **0.9641** | **0.978203** | 最终提交，线上最高 |
 
-最终 ensemble 的精确线上分数未保存在本地记录中，但比赛结果确认高于单模的 `0.9620`。此前记录的 `0.9605` 属于更早的 `0.70 ExtPre16 + 0.30 FT-SAM` 中间实验，不是最终提交。固定本地测试集为从 4,999 张训练图像中预留的 10%，只用于最终比较；线上与本地分数不能直接横向等同。
+线上分数来自比赛平台。固定本地测试集为从 4,999 张训练图像中预留的 10%，只用于最终比较；线上与本地分数不能直接横向等同。
 
 ## 核心方法
 
-1. 使用 ImageNet 预训练的 `torchvision.models.efficientnet_b1`，输入尺寸为 240。
+1. Backbone 为 **EfficientNet-B1**（`torchvision.models.efficientnet_b1`），单模和 ensemble 的两个成员均使用该架构，输入尺寸为 240。
 2. 从 Kaggle [5-class Weather Status Image Classification](https://www.kaggle.com/datasets/ammaralfaifi/5class-weather-status-image-classification) 中保留 cloudy、rainy、snowy、sunny 四类，共 16,778 张图像，先进行 16 epoch 外部预训练。
 3. 比赛训练集固定划分为 80% train、10% validation、10% local test；仅根据 validation macro F1 保存最佳 epoch。
 4. 使用轻量增强：`RandomResizedCrop(scale=(0.85, 1.0))`、水平翻转和轻度 ColorJitter。
@@ -37,8 +37,6 @@
 │   └── B1_ExtPre16EMA_FTSAM_repeat1_testf1_0.978412.pth
 └── docs/cv5_results.md           # 5-Fold CV 明细
 ```
-
-数据集、训练日志、中间 checkpoint 和低收益实验未上传。
 
 ## 环境
 
@@ -65,8 +63,6 @@ datasets/
     ├── snowy/
     └── sunny/
 ```
-
-仓库不分发比赛数据与外部数据；请分别遵守原比赛和外部数据集的许可条款。
 
 ## 复现训练
 
@@ -134,7 +130,7 @@ python train_sam_fixed_split.py \
 
 同一配置在不同硬件和 PyTorch 版本下仍可能有轻微随机波动。仓库中的最强单模来自固定 `seed=42` 的第 3 次微调，按 validation macro F1 选择最佳 epoch。
 
-## 推理与比赛提交
+## 推理
 
 本地调用 ensemble：
 
@@ -147,11 +143,6 @@ print(main.predict(image))
 ```
 
 `main.py` 默认加载两份权重并执行 0.85 / 0.15 logits ensemble；`main_single.py` 只加载长期最强单模。两者都接收 OpenCV BGR 格式的 `numpy.ndarray`，返回四个英文类别名之一。
-
-若平台要求入口文件名必须为 `main.py`：
-
-- ensemble：上传当前 `main.py` 和 `weights/` 中两份权重；
-- 单模：将 `main_single.py` 作为平台的 `main.py`，只需上传 `B1_ExtPre16_EMA_repeat3_testf1_0.976991.pth`。
 
 ## 5-Fold CV
 
